@@ -9,7 +9,7 @@ import java.net.Socket
  * @date 2019-12-10 21:25
  * 连接器的客户端
  */
-open class ConnectionClient {
+open class ConnectionClient(private val callback: ClientCallback) {
 
     companion object {
         const val CONNECT_TIME_OUT = 60 * 1000
@@ -17,10 +17,25 @@ open class ConnectionClient {
 
     private var connectTask: ConnectTask? = null
 
-
-
-    fun connect() {
-
+    fun connect(ip: String, port: Int): Runnable {
+        if (!isStop) {
+            connectTask?.stop()
+        }
+        val task = ConnectTask(InetSocketAddress(ip, port), {
+            // onConnected
+            callback.onConnected(this)
+        }, {
+            // onMessage
+            callback.onMessage(this, it)
+        }, {
+            // onDisconnected
+            callback.onDisconnect(this)
+        }, {
+            // onError
+            callback.onError(this, it)
+        })
+        connectTask = task
+        return task
     }
 
     val isRunning: Boolean
@@ -78,6 +93,9 @@ open class ConnectionClient {
                 val inputStream = socket.getInputStream()
                 while (!isStop && !socket.isClosed && !socket.isInputShutdown) {
                     val info = InfoAgreement.read(inputStream)
+                    if (isStop) {
+                        return
+                    }
                     if (info.isEffective) {
                         messageListener(info)
                     } else if (info.type == Info.TYPE_END) {
@@ -119,6 +137,11 @@ open class ConnectionClient {
          * @param client 客户端对象
          */
         fun onDisconnect(client: ConnectionClient)
+
+        /**
+         * 当发生异常时
+         */
+        fun onError(client: ConnectionClient, error: Throwable)
     }
 
 }
