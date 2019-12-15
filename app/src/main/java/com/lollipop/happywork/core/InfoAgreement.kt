@@ -11,36 +11,32 @@ import java.nio.charset.StandardCharsets
  */
 object InfoAgreement {
 
-    const val TYPE_NOTING = 0
-    const val TYPE_STRING = 1
-    const val TYPE_PROTOBUF = 2
-
     var defCharset = StandardCharsets.UTF_8
 
     fun read(inputStream: InputStream): Info {
         val valueLength = readInt(inputStream)
         if (valueLength == -1) {
-            return Info(TYPE_NOTING)
+            return Info(Info.TYPE_END)
         }
         val infoType = inputStream.read()
         if (valueLength > 0) {
             val bytes = ByteArray(valueLength)
             val dataLength = inputStream.read(bytes)
             if (dataLength < 0) {
-                return Info(TYPE_NOTING)
+                return Info(Info.TYPE_NOTING)
             }
             val info = Info(infoType)
             when (infoType) {
-                TYPE_STRING -> {
+                Info.TYPE_STRING -> {
                     info.value = String(bytes, 0, dataLength, defCharset)
                 }
-                TYPE_PROTOBUF -> {
+                Info.TYPE_PROTOBUF -> {
                     info.bytes = bytes
                 }
             }
             return info
         }
-        return Info(TYPE_NOTING)
+        return Info(Info.TYPE_NOTING)
     }
 
     fun write(outputStream: OutputStream, info: Info) {
@@ -48,10 +44,10 @@ object InfoAgreement {
         var dataArray: ByteArray
         try {
             dataArray = when (type) {
-                TYPE_STRING -> {
+                Info.TYPE_STRING -> {
                     info.value.toByteArray(defCharset)
                 }
-                TYPE_PROTOBUF -> {
+                Info.TYPE_PROTOBUF -> {
                     info.bytes
                 }
                 else -> {

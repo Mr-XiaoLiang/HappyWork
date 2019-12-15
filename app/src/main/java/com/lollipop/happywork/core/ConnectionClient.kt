@@ -15,25 +15,87 @@ open class ConnectionClient {
         const val CONNECT_TIME_OUT = 60 * 1000
     }
 
+    private var connectTask: ConnectTask? = null
+
+
+
+    fun connect() {
+
+    }
+
+    val isRunning: Boolean
+        get() {
+            return connectTask?.isRunning == true
+        }
+
+    val isStop: Boolean
+        get() {
+            return connectTask?.isStop == true
+        }
+
     /**
      * 连接器对象
      */
     private class ConnectTask(private val address: InetSocketAddress,
                               private val connectedListener: (() -> Unit),
                               private val messageListener: ((Info) -> Unit),
-                              private val disconnectedListener: (() -> Unit)): Runnable {
+                              private val disconnectedListener: (() -> Unit),
+                              private val errorListener: ((Throwable) -> Unit)? = null): Runnable {
 
-        private val socket = Socket()
+        private val socket: Socket = Socket()
 
-        private var isStop = false
+        var isStop = false
+            private set
+
+        val isRunning: Boolean
+            get() {
+                return !isStop && !socket.isClosed
+                        && !socket.isOutputShutdown
+                        && !socket.isInputShutdown
+            }
 
         fun write(info: Info) {
-            if (isStop) {
+            if (isStop || socket.isClosed || socket.isOutputShutdown) {
                 return
             }
+            InfoAgreement.write(socket.getOutputStream(), info)
+        }
+
+        fun stop() {
+            if (!isStop && !socket.isClosed) {
+                socket.close()
+            }
+            this.isStop = true
         }
 
         override fun run() {
+            try {
+                socket.connect(address, CONNECT_TIME_OUT)
+                if (isStop) {
+                    return
+                }
+                connectedListener()
+                val inputStream = socket.getInputStream()
+                while (!isStop && !socket.isClosed && !socket.isInputShutdown) {
+                    val info = InfoAgreement.read(inputStream)
+                    if (info.isEffective) {
+                        messageListener(info)
+                    } else if (info.type == Info.TYPE_END) {
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                errorListener?.invoke(e)
+            } finally {
+                if (!isStop) {
+                    isStop = true
+                }
+                disconnectedListener()
+                try {
+                    socket.close()
+                } catch (e: Exception) {}
+            }
         }
 
     }
