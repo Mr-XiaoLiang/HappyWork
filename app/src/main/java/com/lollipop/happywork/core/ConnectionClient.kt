@@ -9,7 +9,7 @@ import java.net.Socket
  * @date 2019-12-10 21:25
  * 连接器的客户端
  */
-open class ConnectionClient(private val callback: ClientCallback) {
+class ConnectionClient(private val callback: ClientCallback) {
 
     companion object {
         const val CONNECT_TIME_OUT = 60 * 1000
