@@ -33,4 +33,14 @@ class InfoHandler(looper: Looper = Looper.getMainLooper()): Handler(looper) {
 
     data class InfoMessage(val tag: String, val info: Info)
 
+    fun sendMessage(tag: String, info: Info) {
+        sendMessage(obtainInfoMessage(tag, info))
+    }
+
+    private fun obtainInfoMessage(tag: String, info: Info): Message {
+        return obtainMessage(WHAT_INFO).apply {
+            obj = InfoMessage(tag, info)
+        }
+    }
+
 }
