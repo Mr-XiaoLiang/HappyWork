@@ -12,13 +12,21 @@ import java.util.concurrent.Executor
 class ConnectionService(
     port: Int,
     private val handler: InfoHandler,
-    private val threadPool: Executor): Runnable {
+    private val threadPool: Executor,
+    private val callback: ServiceCallback): Runnable {
 
     private val serverSocket = ServerSocket(port)
 
     private val clientTaskMap = HashMap<String, ClientTask>()
 
     private var maxCount = -1
+
+    private var isWaiting = false
+
+    fun changeMaxCount(count: Int) {
+        maxCount = count
+        checkClient()
+    }
 
     fun checkClient() {
         val entries = clientTaskMap.entries.iterator()
@@ -29,14 +37,44 @@ class ConnectionService(
                 entries.remove()
             }
         }
+        if (needWait()) {
+            startWait()
+        }
+    }
+
+    private fun startWait() {
+        if (isWaiting) {
+            return
+        }
+        isWaiting = true
+        threadPool.execute(this)
     }
 
     private fun onClientRemove(tag: String) {
         // TODO
     }
 
+    private fun addTask(socket: Socket) {
+        // TODO
+
+    }
+
+    private fun needWait(): Boolean {
+        return maxCount < 0 || clientTaskMap.size < maxCount
+    }
+
     override fun run() {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        while (needWait()) {
+            val socket = serverSocket.accept()
+            addTask(socket)
+        }
+        isWaiting = false
+    }
+
+    interface ServiceCallback {
+        fun onConnected(tag: String)
+        fun onDisconnected(tag: String)
+        fun onError(tag: String, error: Throwable)
     }
 
     private class ClientTask(private val socket: Socket,
