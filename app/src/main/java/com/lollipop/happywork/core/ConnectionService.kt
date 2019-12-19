@@ -1,5 +1,6 @@
 package com.lollipop.happywork.core
 
+import com.lollipop.happywork.utils.md5
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executor
@@ -51,12 +52,34 @@ class ConnectionService(
     }
 
     private fun onClientRemove(tag: String) {
-        // TODO
+        callback.onDisconnected(tag)
+    }
+
+    private fun onClientError(tag: String, error: Throwable) {
+        callback.onError(tag, error)
+    }
+
+    private fun removeTask(tag: String) {
+        clientTaskMap.remove(tag)?.stop()
+    }
+
+    private fun createTag(socket: Socket): String {
+        return "Client-${socket.inetAddress.hostAddress}:${socket.port}".md5()
     }
 
     private fun addTask(socket: Socket) {
-        // TODO
-
+        val tag = createTag(socket)
+        val task = ClientTask(socket, handler, tag,
+            {
+                removeTask(it)
+                onClientRemove(it)
+            },
+            { t, error ->
+                removeTask(t)
+                onClientError(t, error)
+            })
+        clientTaskMap[tag] = task
+        callback.onConnected(tag)
     }
 
     private fun needWait(): Boolean {
@@ -71,6 +94,16 @@ class ConnectionService(
         isWaiting = false
     }
 
+    fun write(tag: String, info: Info) {
+        clientTaskMap[tag]?.let {
+            if (it.isRunning) {
+                it.write(info)
+            } else {
+                clientTaskMap.remove(tag)
+            }
+        }
+    }
+
     interface ServiceCallback {
         fun onConnected(tag: String)
         fun onDisconnected(tag: String)
@@ -80,8 +113,8 @@ class ConnectionService(
     private class ClientTask(private val socket: Socket,
                              private val handler: InfoHandler,
                              private val tag: String,
-                             private val disconnectedListener: (() -> Unit),
-                             private val errorListener: ((Throwable) -> Unit)? = null): Runnable {
+                             private val disconnectedListener: ((String) -> Unit),
+                             private val errorListener: ((String, Throwable) -> Unit)? = null): Runnable {
 
         var isStop = false
             private set
@@ -126,12 +159,12 @@ class ConnectionService(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                errorListener?.invoke(e)
+                errorListener?.invoke(tag, e)
             } finally {
                 if (!isStop) {
                     isStop = true
                 }
-                disconnectedListener()
+                disconnectedListener(tag)
                 try {
                     socket.close()
                 } catch (e: Exception) {}
